@@ -1,0 +1,328 @@
+// ============================================================
+// EXPERIMENT 1: TEMPERATURE AND HUMIDITY (DHT11)
+// CONNECTIONS:
+// DHT VCC  -> Arduino 5V
+// DHT GND  -> Arduino GND
+// DHT DATA -> Arduino D2
+// LIBRARY: Adafruit DHT Sensor Library
+// ============================================================
+
+#include <DHT.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+}
+
+void loop() {
+  float h = dht.readHumidity();
+  float c = dht.readTemperature();
+  float f = dht.readTemperature(true);
+
+  if (!isnan(c) && !isnan(h)) {
+    Serial.print("Temp: ");
+    Serial.print(c);
+    Serial.print(" C | ");
+    Serial.print(f);
+    Serial.print(" F | Humidity: ");
+    Serial.println(h);
+  }
+
+  delay(1000);
+}
+
+
+// ============================================================
+// EXPERIMENT 2: POLICE LIGHT WITH SPEED CONTROL
+// CONNECTIONS:
+// LED1 anode -> D8 through 220-ohm resistor
+// LED1 cathode -> GND
+// LED2 anode -> D9 through 220-ohm resistor
+// LED2 cathode -> GND
+// SERIAL MONITOR: Type fast, medium, or slow
+// ============================================================
+
+int led1 = 8;
+int led2 = 9;
+int blinkDelay = 500;
+
+void setup() {
+  pinMode(led1, OUTPUT);
+  pinMode(led2, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("Type fast, medium, slow");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+
+    if (cmd == "fast") blinkDelay = 200;
+    if (cmd == "medium") blinkDelay = 500;
+    if (cmd == "slow") blinkDelay = 1000;
+  }
+
+  digitalWrite(led1, HIGH);
+  digitalWrite(led2, LOW);
+  delay(blinkDelay);
+
+  digitalWrite(led1, LOW);
+  digitalWrite(led2, HIGH);
+  delay(blinkDelay);
+}
+
+
+// ============================================================
+// EXPERIMENT 3: WEATHER MONITORING
+// CONNECTIONS:
+// DHT VCC -> 5V, GND -> GND, DATA -> D2
+// Rain sensor VCC -> 5V, GND -> GND, DO -> D3
+// LIBRARY: Adafruit DHT Sensor Library
+// ============================================================
+
+#include <DHT.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+DHT weatherDht(DHTPIN, DHTTYPE);
+
+int rainPin = 3;
+
+void setup() {
+  Serial.begin(9600);
+  weatherDht.begin();
+  pinMode(rainPin, INPUT);
+}
+
+void loop() {
+  float temp = weatherDht.readTemperature();
+  int rain = (digitalRead(rainPin) == LOW) ? 1 : 0;
+
+  Serial.print("Temperature: ");
+  Serial.print(temp);
+  Serial.println(" C");
+
+  Serial.print("Rain Status: ");
+  Serial.println(rain);  // 1 = rain, 0 = no rain
+
+  delay(1000);
+}
+
+
+// ============================================================
+// EXPERIMENT 4: SMART IRRIGATION
+// CONNECTIONS:
+// Soil sensor AO -> A0, VCC -> 5V, GND -> GND
+// Rain sensor DO -> D2, VCC -> 5V, GND -> GND
+// Buzzer positive -> D3, negative -> GND
+// ============================================================
+
+int soilPin = A0;
+int irrigationRainPin = 2;
+int irrigationBuzzer = 3;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(irrigationRainPin, INPUT);
+  pinMode(irrigationBuzzer, OUTPUT);
+}
+
+void loop() {
+  int raw = analogRead(soilPin);
+
+  // Example calibration: 0=dry, 1023=wet
+  int soil = map(raw, 0, 1023, 0, 100);
+
+  bool rain = (digitalRead(irrigationRainPin) == LOW);
+
+  Serial.print("Soil: ");
+  Serial.print(soil);
+  Serial.print("% | Rain: ");
+  Serial.println(rain ? "Yes" : "No");
+
+  if (soil < 40 && !rain) {
+    digitalWrite(irrigationBuzzer, HIGH);
+    Serial.println("Irrigation Required");
+  } else {
+    digitalWrite(irrigationBuzzer, LOW);
+    Serial.println("Irrigation Not Required");
+  }
+
+  delay(1000);
+}
+
+
+// ============================================================
+// EXPERIMENT 5: INTRUSION DETECTION
+// CONNECTIONS:
+// PIR VCC -> 5V, GND -> GND, OUT -> D2
+// Buzzer positive -> D3, negative -> GND
+// BUZZER: ON for 3 seconds; cooldown 10 seconds
+// ============================================================
+
+int pirPin = 2;
+int alarmBuzzer = 3;
+unsigned long startTime;
+unsigned long lastAlert = 0;
+unsigned long buzzerStart = 0;
+bool alarmOn = false;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(pirPin, INPUT);
+  pinMode(alarmBuzzer, OUTPUT);
+  startTime = millis();
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  if (digitalRead(pirPin) == HIGH &&
+      !alarmOn &&
+      (lastAlert == 0 || now - lastAlert >= 10000)) {
+
+    Serial.print("Intrusion detected at ");
+    Serial.print((now - startTime) / 1000.0);
+    Serial.println(" seconds since startup");
+
+    digitalWrite(alarmBuzzer, HIGH);
+    buzzerStart = now;
+    lastAlert = now;
+    alarmOn = true;
+  }
+
+  if (alarmOn && now - buzzerStart >= 3000) {
+    digitalWrite(alarmBuzzer, LOW);
+    alarmOn = false;
+  }
+}
+
+
+// ============================================================
+// EXPERIMENT 6: SMART PARKING (HC-SR04)
+// CONNECTIONS:
+// VCC -> 5V, GND -> GND
+// TRIG -> D9, ECHO -> D10
+// ============================================================
+
+int trigPin = 9;
+int echoPin = 10;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long duration = pulseIn(echoPin, HIGH, 30000);
+  float distance = duration * 0.034 / 2;
+
+  if (duration == 0) {
+    Serial.println("No echo detected");
+  } else {
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+    if (distance < 15)
+      Serial.println("SLOT OCCUPIED");
+    else
+      Serial.println("SLOT VACANT");
+  }
+
+  delay(1000);
+}
+
+
+// ============================================================
+// EXPERIMENT 7: IR OBJECT COUNTING
+// CONNECTIONS:
+// IR VCC -> 5V, GND -> GND, OUT -> D2
+// COUNTS ON A NEW DETECTION; 1-SECOND DEBOUNCE
+// ============================================================
+
+int irPin = 2;
+int objectCount = 0;
+int previousState = HIGH;
+unsigned long lastCount = 0;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(irPin, INPUT);
+}
+
+void loop() {
+  int currentState = digitalRead(irPin);
+  unsigned long now = millis();
+
+  if (currentState == LOW &&
+      previousState == HIGH &&
+      (lastCount == 0 || now - lastCount >= 1000)) {
+
+    objectCount++;
+
+    Serial.print("Object detected! Total Count: ");
+    Serial.println(objectCount);
+
+    lastCount = now;
+  }
+
+  previousState = currentState;
+}
+
+
+// ============================================================
+// EXPERIMENT 8: MOTION-ACTIVATED LIGHT WITH RELAY
+// CONNECTIONS:
+// PIR VCC -> 5V, GND -> GND, OUT -> D2
+// Relay VCC -> 5V, GND -> GND, IN -> D3
+// Arduino 5V -> Relay COM
+// Relay NO -> 220-ohm resistor -> LED anode
+// LED cathode -> GND
+// ============================================================
+
+int motionPin = 2;
+int relayPin = 3;
+unsigned long lastMotion = 0;
+bool lightOn = false;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(motionPin, INPUT);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW); // Assumes active-HIGH relay
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  if (digitalRead(motionPin) == HIGH) {
+    lastMotion = now;
+
+    if (!lightOn) {
+      digitalWrite(relayPin, HIGH);
+      lightOn = true;
+    }
+
+    Serial.println("Motion detected - Light ON");
+  }
+
+  if (lightOn && now - lastMotion >= 10000) {
+    digitalWrite(relayPin, LOW);
+    lightOn = false;
+    Serial.println("Light OFF");
+  }
+}
