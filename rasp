@@ -1,0 +1,290 @@
+# ============================================================
+# EXPERIMENT 1: DHT TEMPERATURE AND HUMIDITY
+# CONNECTIONS:
+# DHT VCC -> 3.3V
+# DHT GND -> GND
+# DHT DATA -> BCM GPIO4
+# LIBRARY: Adafruit_DHT (DHT11)
+# ============================================================
+
+import Adafruit_DHT
+import time
+
+sensor = Adafruit_DHT.DHT11
+pin = 4
+
+while True:
+    h, c = Adafruit_DHT.read_retry(sensor, pin)
+
+    if h is not None and c is not None:
+        f = c * 9 / 5 + 32
+        print(f"Temp: {c:.1f} C | {f:.1f} F | Humidity: {h:.0f}%")
+    else:
+        print("Sensor reading failed")
+
+    time.sleep(1)
+
+
+# ============================================================
+# EXPERIMENT 2: POLICE LIGHT
+# CONNECTIONS:
+# LED1 anode -> 220-ohm resistor -> GPIO17
+# LED2 anode -> 220-ohm resistor -> GPIO27
+# Both cathodes -> GND
+# ============================================================
+
+import RPi.GPIO as GPIO
+import time
+import threading
+
+led1, led2 = 17, 27
+blink_delay = 0.5
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(led1, GPIO.OUT)
+GPIO.setup(led2, GPIO.OUT)
+
+def get_command():
+    global blink_delay
+
+    while True:
+        cmd = input("fast / medium / slow: ").strip().lower()
+
+        if cmd == "fast":
+            blink_delay = 0.2
+        elif cmd == "medium":
+            blink_delay = 0.5
+        elif cmd == "slow":
+            blink_delay = 1.0
+
+threading.Thread(target=get_command, daemon=True).start()
+
+try:
+    while True:
+        GPIO.output(led1, 1)
+        GPIO.output(led2, 0)
+        time.sleep(blink_delay)
+
+        GPIO.output(led1, 0)
+        GPIO.output(led2, 1)
+        time.sleep(blink_delay)
+except KeyboardInterrupt:
+    GPIO.cleanup()
+
+
+# ============================================================
+# EXPERIMENT 3: WEATHER MONITORING
+# CONNECTIONS:
+# DHT DATA -> GPIO4
+# Rain sensor DO -> GPIO17
+# VCC -> compatible supply; GND -> GND
+# ============================================================
+
+import Adafruit_DHT
+import RPi.GPIO as GPIO
+import time
+
+dht = Adafruit_DHT.DHT11
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN)
+
+try:
+    while True:
+        h, temp = Adafruit_DHT.read_retry(dht, 4)
+        rain = 1 if GPIO.input(17) == GPIO.LOW else 0
+
+        print("Temperature:", temp, "C")
+        print("Rain Status:", rain)
+        time.sleep(1)
+finally:
+    GPIO.cleanup()
+
+
+# ============================================================
+# EXPERIMENT 4: INTRUSION DETECTION
+# CONNECTIONS:
+# PIR OUT -> GPIO17
+# Buzzer positive -> GPIO27
+# Buzzer negative -> GND
+# 3-second buzzer; 10-second cooldown
+# ============================================================
+
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN)
+GPIO.setup(27, GPIO.OUT)
+
+start = time.monotonic()
+last_alert = -10.0
+
+try:
+    while True:
+        now = time.monotonic()
+
+        if GPIO.input(17) == GPIO.HIGH and now - last_alert >= 10:
+            print(f"Intrusion detected at {now - start:.1f} seconds since startup")
+
+            GPIO.output(27, GPIO.HIGH)
+            time.sleep(3)
+            GPIO.output(27, GPIO.LOW)
+
+            last_alert = time.monotonic()
+
+        time.sleep(0.05)
+finally:
+    GPIO.output(27, GPIO.LOW)
+    GPIO.cleanup()
+
+
+# ============================================================
+# EXPERIMENT 5: SMART PARKING
+# CONNECTIONS:
+# HC-SR04 TRIG -> GPIO23
+# HC-SR04 ECHO -> GPIO24 THROUGH VOLTAGE DIVIDER
+# VCC -> 5V, GND -> GND
+# LIBRARY: gpiozero
+# ============================================================
+
+from gpiozero import DistanceSensor
+from time import sleep
+
+sensor = DistanceSensor(echo=24, trigger=23, max_distance=2.0)
+
+while True:
+    distance = sensor.distance * 100
+
+    print(f"Distance: {distance:.2f} cm")
+
+    if distance < 15:
+        print("SLOT OCCUPIED")
+    else:
+        print("SLOT VACANT")
+
+    sleep(1)
+
+
+# ============================================================
+# EXPERIMENT 6: IR OBJECT COUNTING
+# CONNECTIONS:
+# IR OUT -> GPIO17
+# VCC -> compatible supply
+# GND -> GND
+# ============================================================
+
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN)
+
+count = 0
+last_count = 0
+
+try:
+    while True:
+        now = time.monotonic()
+
+        if GPIO.input(17) == GPIO.LOW and now - last_count >= 1:
+            count += 1
+            print(f"Object detected! Total Count: {count}")
+            last_count = now
+
+            # Wait until the object leaves the sensor
+            while GPIO.input(17) == GPIO.LOW:
+                time.sleep(0.01)
+
+        time.sleep(0.01)
+finally:
+    GPIO.cleanup()
+
+
+# ============================================================
+# EXPERIMENT 7: MOTION-ACTIVATED LIGHT WITH RELAY
+# CONNECTIONS:
+# PIR OUT -> GPIO17
+# Relay IN -> GPIO27
+# Relay VCC/GND -> compatible supply/GND
+# Demonstration LED load -> Relay COM and NO circuit
+# ============================================================
+
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN)
+GPIO.setup(27, GPIO.OUT)
+
+last_motion = 0
+light_on = False
+
+try:
+    while True:
+        now = time.monotonic()
+
+        if GPIO.input(17) == GPIO.HIGH:
+            last_motion = now
+
+            if not light_on:
+                GPIO.output(27, GPIO.HIGH)
+                light_on = True
+
+            print("Motion detected - Light ON")
+
+        if light_on and now - last_motion >= 10:
+            GPIO.output(27, GPIO.LOW)
+            light_on = False
+            print("Light OFF")
+
+        time.sleep(0.1)
+finally:
+    GPIO.output(27, GPIO.LOW)
+    GPIO.cleanup()
+
+
+# ============================================================
+# EXPERIMENT 8: MOTION-TRIGGERED SECURITY CAMERA
+# CONNECTIONS:
+# Pi Camera -> CSI connector
+# PIR OUT -> GPIO17
+# PIR VCC/GND -> compatible supply/GND
+# CREATE a folder called captures
+# LIBRARY: picamera2
+# ============================================================
+
+from picamera2 import Picamera2
+import RPi.GPIO as GPIO
+from datetime import datetime
+import time
+import os
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN)
+
+os.makedirs("captures", exist_ok=True)
+
+camera = Picamera2()
+camera.configure(camera.create_still_configuration())
+camera.start()
+time.sleep(2)
+
+last_capture = -5.0
+
+try:
+    while True:
+        now = time.monotonic()
+
+        if GPIO.input(17) == GPIO.HIGH and now - last_capture >= 5:
+            stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"captures/image_{stamp}.jpg"
+
+            camera.capture_file(filename)
+            print(f"Motion detected! Image saved: {filename}")
+
+            last_capture = time.monotonic()
+
+        time.sleep(0.05)
+finally:
+    camera.stop()
+    GPIO.cleanup()
