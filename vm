@@ -1,0 +1,248 @@
+
+
+COMMANDS for vm 1:
+    sudo apt update
+    sudo apt install python3 -y
+    mkdir -p ~/web
+    echo "<h1>Response from Web Server 1</h1>" > ~/web/index.html
+    cd ~/web
+    python3 -m http.server 8080 --bind 0.0.0.0
+
+find the IP address:
+
+    hostname -I
+
+COMMANDS:
+    sudo apt update
+    sudo apt install python3 -y
+    mkdir -p ~/web
+    echo "<h1>Response from Web Server 2</h1>" > ~/web/index.html
+    cd ~/web
+    python3 -m http.server 8080 --bind 0.0.0.0
+
+    hostname -I
+
+
+
+INSTRUCTIONS:
+1. Start LoadBalancer and open its terminal.
+2. Replace the placeholders below with the actual backend IP addresses.
+
+COMMANDS:
+    curl http://WEB_SERVER_1_IP:8080
+    curl http://WEB_SERVER_2_IP:8080
+
+
+
+If curl is not installed:
+    sudo apt update
+    sudo apt install curl -y
+
+
+INSTALL NGINX:
+    sudo apt update
+    sudo apt install nginx -y
+
+OPEN THE CONFIGURATION:
+    sudo nano /etc/nginx/sites-available/default
+
+Replace the existing contents with the following configuration. Use your actual backend IP addresses, not the example IPs.
+
+NGINX CONFIGURATION:
+    upstream web_servers {
+        server 192.168.100.11:8080;
+        server 192.168.100.12:8080;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://web_servers;
+        }
+    }
+
+SAVE:
+- Press Ctrl+O, then Enter.
+- Press Ctrl+X to exit.
+
+TEST AND RESTART NGINX:
+    sudo nginx -t
+    sudo systemctl restart nginx
+    sudo systemctl status nginx
+
+Find the load balancer's IP address:
+    hostname -I
+
+============================================================
+STEP 5: TEST LOAD BALANCING
+============================================================
+
+Ensure both Python web servers are running. On LoadBalancer, run:
+
+    curl http://localhost
+    curl http://localhost
+    curl http://localhost
+    curl http://localhost
+
+EXPECTED OUTPUT:
+Responses should generally alternate between:
+    <h1>Response from Web Server 1</h1>
+    <h1>Response from Web Server 2</h1>
+
+Nginx uses round-robin balancing by default. The exact order may vary.
+
+To test from another VM or computer:
+    curl http://LOAD_BALANCER_IP
+
+Replace LOAD_BALANCER_IP with the actual LoadBalancer IP.
+
+============================================================
+PART 3 — SERVER CONSOLIDATION
+============================================================
+
+OBJECTIVE:
+Reduce the number of VMs while continuing to provide two web services.
+
+BEFORE CONSOLIDATION — 3 VMs:
+- WebServer1
+- WebServer2
+- LoadBalancer
+
+AFTER CONSOLIDATION — 2 VMs:
+- One VM hosts both web services on separate ports.
+- One VM hosts Nginx as the load balancer.
+
+STEP 6: HOST TWO WEB SERVICES ON ONE VM
+
+On WebServer1, stop its existing Python web server by pressing Ctrl+C.
+Run:
+
+    mkdir -p ~/web1
+    mkdir -p ~/web2
+    echo "<h1>Response from Consolidated Web Server 1</h1>" > ~/web1/index.html
+    echo "<h1>Response from Consolidated Web Server 2</h1>" > ~/web2/index.html
+
+Open Terminal 1 on the consolidated web VM:
+    cd ~/web1
+    python3 -m http.server 8081 --bind 0.0.0.0
+
+Open a second terminal on the same VM:
+    cd ~/web2
+    python3 -m http.server 8082 --bind 0.0.0.0
+
+Keep both terminals open. The services now use ports 8081 and 8082.
+
+STEP 7: UPDATE NGINX FOR THE CONSOLIDATED SERVICES
+
+On LoadBalancer, open:
+    sudo nano /etc/nginx/sites-available/default
+
+Replace the contents with this configuration:
+    upstream web_servers {
+        server CONSOLIDATED_WEB_VM_IP:8081;
+        server CONSOLIDATED_WEB_VM_IP:8082;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://web_servers;
+        }
+    }
+
+Replace CONSOLIDATED_WEB_VM_IP with the actual IP address of WebServer1. Save with Ctrl+O, Enter, then Ctrl+X.
+
+Test and reload:
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+Test:
+    curl http://localhost
+    curl http://localhost
+
+============================================================
+PART 4 — FAULT TOLERANCE
+============================================================
+
+STEP 8: CONFIGURE NGINX TO HANDLE AN UNAVAILABLE BACKEND
+
+On LoadBalancer, open:
+    sudo nano /etc/nginx/sites-available/default
+
+For the original two-server setup on port 8080, use:
+    upstream web_servers {
+        server 192.168.100.11:8080 max_fails=2 fail_timeout=10s;
+        server 192.168.100.12:8080 max_fails=2 fail_timeout=10s;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://web_servers;
+        }
+    }
+
+Replace the example IP addresses with the actual WebServer1 and WebServer2 IP addresses. Save with Ctrl+O, Enter, then Ctrl+X.
+
+Test and reload:
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+NOTE:
+This configuration applies to the original two-server setup on port 8080, not the consolidated setup on ports 8081 and 8082. Nginx uses passive failure detection; a backend may not be marked unavailable until requests fail.
+
+============================================================
+STEP 9: SIMULATE A WEB SERVER FAILURE
+============================================================
+
+BEFORE FAILURE:
+Make sure both web servers and LoadBalancer are running. On LoadBalancer, run:
+
+    curl http://localhost
+    curl http://localhost
+    curl http://localhost
+    curl http://localhost
+
+Expected: Responses from both backend servers.
+
+SIMULATE FAILURE:
+1. Go to the WebServer1 terminal where the Python server is running.
+2. Press Ctrl+C to stop WebServer1.
+3. Keep WebServer2 and LoadBalancer running.
+
+TEST AFTER FAILURE:
+On LoadBalancer, run:
+
+    curl http://localhost
+    curl http://localhost
+    curl http://localhost
+
+EXPECTED RESULT:
+After Nginx detects WebServer1's failure, requests should be served by WebServer2.
+
+RESTORE WEB SERVER 1:
+On WebServer1, run:
+
+    cd ~/web
+    python3 -m http.server 8080 --bind 0.0.0.0
+
+Then test from LoadBalancer:
+    curl http://localhost
+    curl http://localhost
+
+NOTE:
+The max_fails and fail_timeout settings provide basic passive failure handling. They do not guarantee instant failure detection or eliminate every possible interruption.
+
+============================================================
+FINAL RESULT
+============================================================
+
+1. Created Ubuntu VMs using VMware Workstation.
+2. Configured two Python-based web servers.
+3. Configured Nginx as a reverse proxy and load balancer.
+4. Demonstrated service consolidation by hosting two web services on one VM.
+5. Demonstrated fault tolerance by stopping one backend and testing requests through Nginx.
+
