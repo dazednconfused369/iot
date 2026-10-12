@@ -1,0 +1,189 @@
+
+
+1) CHECK NETWORK ON BOTH HOST1 AND HOST2
+----------------------------------------
+ip -br addr
+ip route
+ls /etc/netplan/
+
+2) EDIT NETPLAN (ONLY AFTER CONFIRMING SUBNET AND INTERFACE)
+-----------------------------------------------------------
+sudo nano /etc/netplan/YOUR-FILE.yaml
+
+Example Host1 configuration (replace ens33 and subnet if different):
+network:
+  version: 2
+  ethernets:
+    ens33:
+      dhcp4: false
+      addresses:
+        - 192.168.56.101/24
+
+Example Host2 configuration: use 192.168.56.102/24 instead.
+
+Save Nano: Ctrl+O, Enter, Ctrl+X.
+
+Apply on both hosts (replace filename as needed):
+sudo chmod 600 /etc/netplan/YOUR-FILE.yaml
+sudo netplan generate
+sudo netplan try
+sudo netplan apply
+ip -br addr
+ip route
+
+3) TEST CONNECTIVITY
+--------------------
+On Host1:
+ping -c 4 192.168.56.102
+
+On Host2:
+ping -c 4 192.168.56.101
+
+4) CHECK NESTED VIRTUALIZATION (BOTH HOSTS)
+-------------------------------------------
+egrep -o 'vmx|svm' /proc/cpuinfo | sort -u
+lscpu | grep -i virtualization
+
+5) INSTALL KVM/LIBVIRT/SSH (BOTH HOSTS)
+---------------------------------------
+sudo apt update
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst openssh-server
+sudo systemctl enable --now libvirtd
+sudo systemctl enable --now ssh
+sudo usermod -aG libvirt "$USER"
+sudo usermod -aG kvm "$USER"
+
+# Log out and back in, then:
+lsmod | grep kvm
+sudo systemctl status libvirtd
+sudo virsh list --all
+
+6) OPTIONAL: CREATE A NESTED VM
+-------------------------------
+# Ensure this ISO exists first:
+ls -l /var/lib/libvirt/images/ubuntu.iso
+
+# On Host1:
+sudo virt-install \
+  --name test-vm1 \
+  --memory 2048 \
+  --vcpus 2 \
+  --disk size=15 \
+  --cdrom /var/lib/libvirt/images/ubuntu.iso \
+  --network network=default \
+  --graphics none \
+  --noautoconsole
+
+# On Host2, change the VM name to test-vm2 and run the same command.
+sudo virsh list --all
+
+7) INSTALL BACKEND WEB SERVERS
+------------------------------
+# On Backend1:
+sudo apt update
+sudo apt install -y nginx
+echo "Hello from Backend 1" | sudo tee /var/www/html/index.html
+sudo systemctl enable --now nginx
+ip -br addr
+
+# On Backend2:
+sudo apt update
+sudo apt install -y nginx
+echo "Hello from Backend 2" | sudo tee /var/www/html/index.html
+sudo systemctl enable --now nginx
+ip -br addr
+
+8) INSTALL AND CONFIGURE LOAD BALANCER
+--------------------------------------
+# On the Load Balancer VM:
+sudo apt update
+sudo apt install -y nginx
+sudo nano /etc/nginx/nginx.conf
+
+# Add the following INSIDE the existing http { } block.
+# Replace BACKEND1_IP and BACKEND2_IP with real backend IP addresses.
+
+upstream backend_servers {
+    server BACKEND1_IP:80;
+    server BACKEND2_IP:80;
+}
+
+server {
+    listen 8080;
+
+    location / {
+        proxy_pass http://backend_servers;
+    }
+}
+
+# Test and reload:
+sudo nginx -t
+sudo systemctl enable --now nginx
+sudo systemctl reload nginx
+
+9) TEST LOAD BALANCING
+----------------------
+# Replace LOAD_BALANCER_IP with the actual load balancer IP:
+curl -i http://LOAD_BALANCER_IP:8080
+curl -i http://LOAD_BALANCER_IP:8080
+curl -i http://LOAD_BALANCER_IP:8080
+curl -i http://LOAD_BALANCER_IP:8080
+
+10) TEST BACKEND FAILURE
+------------------------
+# On Backend1:
+sudo systemctl stop nginx
+
+# From the client/load balancer:
+curl -i http://LOAD_BALANCER_IP:8080
+
+# Restore Backend1:
+sudo systemctl start nginx
+
+NOTE: This is application-level load balancing, not automatic VM failover.
+
+11) CHECK LIBVIRT VMS
+---------------------
+sudo virsh list --all
+
+12) VM TRANSFER WITH VMWARE WORKSTATION
+---------------------------------------
+# There is no command-line Workstation equivalent to native vSphere vMotion.
+# For a powered-off transfer: shut down the VM, copy the entire VM folder
+# (.vmx and virtual disk files) to the destination, open the .vmx there,
+# choose “I Copied It” if prompted, then boot and test.
+
+13) KVM/LIBVIRT LIVE MIGRATION — ONLY AFTER PREREQUISITES
+--------------------------------------------------------
+# Example only. Replace Host2 IP and VM name.
+# Requires SSH authentication, compatible hosts, destination resources,
+# working networking, and appropriate shared/storage-transfer configuration.
+sudo virsh migrate --live test-vm1 qemu+ssh://HOST2_IP/system
+
+# On Host2:
+sudo virsh list --all
+
+EXPECTED CHECKS
+---------------
+# Host network:
+ip -br addr
+ping -c 4 PEER_HOST_IP
+
+# KVM/libvirt:
+lsmod | grep kvm
+sudo systemctl is-active libvirtd
+sudo virsh list --all
+
+# Nginx:
+sudo nginx -t
+sudo systemctl is-active nginx
+curl -i http://LOAD_BALANCER_IP:8080
+
+LIMITATIONS
+-----------
+- VMware Workstation Pro is the outer Type 2 hypervisor.
+- KVM inside Ubuntu is a nested hypervisor, only when supported.
+- Installing KVM on two VMs does not automatically create a cluster.
+- Workstation does not provide native vSphere HA/DRS/vMotion.
+- Nginx balances application requests; it does not restart failed VMs.
+- Do not run static-IP examples until you verify the real VMware subnet.
