@@ -1,0 +1,466 @@
+import socket
+import threading
+
+HOST = "127.0.0.1"
+PORT = 5000
+
+clients = []
+
+
+def handle_client(client, address):
+    print(f"Client connected: {address}")
+
+    while True:
+        try:
+            message = client.recv(1024).decode()
+
+            if not message:
+                break
+
+            print(f"{address}: {message}")
+
+            # Broadcast message to all other clients
+            for c in clients:
+                if c != client:
+                    try:
+                        c.send(f"{address}: {message}".encode())
+                    except:
+                        pass
+
+        except:
+            break
+
+    print(f"Client disconnected: {address}")
+
+    if client in clients:
+        clients.remove(client)
+
+    client.close()
+
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+server.bind((HOST, PORT))
+server.listen()
+
+print(f"Server running at {HOST}:{PORT}")
+
+while True:
+    client, address = server.accept()
+
+    clients.append(client)
+
+    thread = threading.Thread(
+        target=handle_client,
+        args=(client, address)
+    )
+
+    thread.start()
+
+
+
+
+
+
+
+import socket
+import threading
+
+HOST = "127.0.0.1"
+PORT = 5000
+
+
+def receive_messages():
+    while True:
+        try:
+            message = client.recv(1024).decode()
+
+            if message:
+                print("\nReceived:", message)
+
+        except:
+            print("Disconnected from server")
+            break
+
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+client.connect((HOST, PORT))
+
+print("Connected to server.")
+print("Type messages below:\n")
+
+thread = threading.Thread(target=receive_messages)
+thread.daemon = True
+thread.start()
+
+while True:
+    message = input()
+
+    if message.lower() == "exit":
+        client.close()
+        break
+
+    client.send(message.encode())
+
+
+
+
+
+Ricart–Agrawala Algorithm
+
+
+
+
+
+import threading
+import time
+
+
+class Process:
+    def __init__(self, process_id, all_processes):
+        self.process_id = process_id
+        self.all_processes = all_processes
+
+        self.clock = 0
+        self.requesting = False
+        self.request_timestamp = None
+
+        self.replies_received = 0
+        self.deferred_replies = []
+
+        self.lock = threading.Lock()
+
+    def request_cs(self):
+        with self.lock:
+            self.clock += 1
+            self.requesting = True
+            self.request_timestamp = self.clock
+            self.replies_received = 0
+
+        print(
+            f"Process {self.process_id} requesting CS "
+            f"with timestamp {self.request_timestamp}"
+        )
+
+        # Send REQUEST to all other processes
+        for process in self.all_processes:
+            if process.process_id != self.process_id:
+                process.receive_request(
+                    self.process_id,
+                    self.request_timestamp
+                )
+
+        # Wait for replies
+        while self.replies_received < len(self.all_processes) - 1:
+            time.sleep(0.1)
+
+        self.enter_cs()
+
+    def receive_request(self, sender_id, timestamp):
+        with self.lock:
+            self.clock = max(self.clock, timestamp) + 1
+
+            should_defer = (
+                self.requesting and
+                (
+                    self.request_timestamp < timestamp or
+                    (
+                        self.request_timestamp == timestamp and
+                        self.process_id < sender_id
+                    )
+                )
+            )
+
+            if should_defer:
+                print(
+                    f"Process {self.process_id} defers reply "
+                    f"to Process {sender_id}"
+                )
+
+                self.deferred_replies.append(sender_id)
+
+                return
+
+        # Send immediate reply
+        print(
+            f"Process {self.process_id} sends REPLY "
+            f"to Process {sender_id}"
+        )
+
+        for process in self.all_processes:
+            if process.process_id == sender_id:
+                process.receive_reply()
+
+    def receive_reply(self):
+        with self.lock:
+            self.replies_received += 1
+
+    def enter_cs(self):
+        print(f"\n>>> Process {self.process_id} ENTERED Critical Section")
+
+        time.sleep(2)
+
+        print(f"<<< Process {self.process_id} EXITED Critical Section\n")
+
+        self.release_cs()
+
+    def release_cs(self):
+        with self.lock:
+            self.requesting = False
+
+            deferred = self.deferred_replies.copy()
+            self.deferred_replies.clear()
+
+        # Send deferred replies
+        for sender_id in deferred:
+            for process in self.all_processes:
+                if process.process_id == sender_id:
+                    print(
+                        f"Process {self.process_id} now sends "
+                        f"deferred REPLY to Process {sender_id}"
+                    )
+
+                    process.receive_reply()
+
+
+# Create processes
+processes = []
+
+for i in range(3):
+    processes.append(Process(i, processes))
+
+# Update process list reference
+for process in processes:
+    process.all_processes = processes
+
+
+# Simulate concurrent requests
+threads = []
+
+for process in processes:
+    thread = threading.Thread(target=process.request_cs)
+    threads.append(thread)
+    thread.start()
+
+for thread in threads:
+    thread.join()
+
+
+
+
+
+
+
+Token Ring Algorithm
+
+
+import threading
+import time
+
+
+class TokenRing:
+
+    def __init__(self, number_of_processes):
+        self.number_of_processes = number_of_processes
+        self.token_holder = 0
+
+        self.condition = threading.Condition()
+
+    def request_cs(self, process_id):
+
+        with self.condition:
+
+            print(f"Process {process_id} requests Critical Section")
+
+            # Wait until this process gets token
+            while self.token_holder != process_id:
+                self.condition.wait()
+
+            print(
+                f"\n>>> Process {process_id} ENTERED "
+                f"Critical Section"
+            )
+
+        # Execute critical section
+        time.sleep(2)
+
+        with self.condition:
+
+            print(
+                f"<<< Process {process_id} EXITED "
+                f"Critical Section"
+            )
+
+            # Pass token to next process in ring
+            self.token_holder = (
+                process_id + 1
+            ) % self.number_of_processes
+
+            print(
+                f"Token passed to Process "
+                f"{self.token_holder}\n"
+            )
+
+            self.condition.notify_all()
+
+
+# Number of processes
+N = 4
+
+ring = TokenRing(N)
+
+threads = []
+
+for i in range(N):
+    thread = threading.Thread(
+        target=ring.request_cs,
+        args=(i,)
+    )
+
+    threads.append(thread)
+    thread.start()
+
+for thread in threads:
+    thread.join()
+
+
+
+
+
+
+
+
+
+
+Centralized Coordinator Algorithm
+
+
+import threading
+import time
+from queue import Queue
+
+
+class Coordinator:
+
+    def __init__(self):
+        self.cs_busy = False
+        self.waiting_queue = Queue()
+        self.lock = threading.Lock()
+
+    def request_cs(self, process):
+
+        with self.lock:
+
+            print(
+                f"Process {process.process_id} "
+                f"sends REQUEST to Coordinator"
+            )
+
+            if not self.cs_busy:
+
+                self.cs_busy = True
+
+                print(
+                    f"Coordinator sends GRANT "
+                    f"to Process {process.process_id}"
+                )
+
+                process.grant_access()
+
+            else:
+
+                print(
+                    f"Process {process.process_id} "
+                    f"added to waiting queue"
+                )
+
+                self.waiting_queue.put(process)
+
+    def release_cs(self, process):
+
+        with self.lock:
+
+            print(
+                f"Process {process.process_id} "
+                f"sends RELEASE to Coordinator"
+            )
+
+            if not self.waiting_queue.empty():
+
+                next_process = self.waiting_queue.get()
+
+                print(
+                    f"Coordinator sends GRANT "
+                    f"to Process {next_process.process_id}"
+                )
+
+                next_process.grant_access()
+
+            else:
+
+                self.cs_busy = False
+
+
+class Process:
+
+    def __init__(self, process_id, coordinator):
+
+        self.process_id = process_id
+        self.coordinator = coordinator
+
+        self.event = threading.Event()
+
+    def request_cs(self):
+
+        self.coordinator.request_cs(self)
+
+        # Wait for GRANT
+        self.event.wait()
+
+        print(
+            f"\n>>> Process {self.process_id} "
+            f"ENTERED Critical Section"
+        )
+
+        time.sleep(2)
+
+        print(
+            f"<<< Process {self.process_id} "
+            f"EXITED Critical Section\n"
+        )
+
+        self.event.clear()
+
+        self.coordinator.release_cs(self)
+
+    def grant_access(self):
+
+        self.event.set()
+
+
+# Create coordinator
+coordinator = Coordinator()
+
+# Create processes
+processes = [
+    Process(0, coordinator),
+    Process(1, coordinator),
+    Process(2, coordinator)
+]
+
+threads = []
+
+# Start processes
+for process in processes:
+
+    thread = threading.Thread(
+        target=process.request_cs
+    )
+
+    threads.append(thread)
+
+    thread.start()
+
+for thread in threads:
+    thread.join()

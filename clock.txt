@@ -1,0 +1,158 @@
+clock = 0
+
+def event(name):
+    global clock
+    clock += 1
+    print(name, ":", clock)
+
+def send():
+    global clock
+    clock += 1
+    print("Sent:", clock)
+    return clock
+
+def receive(t):
+    global clock
+    clock = max(clock, t) + 1
+    print("Received:", clock)
+
+event("Event 1")
+t = send()
+receive(t)
+event("Event 2")
+
+
+
+
+
+
+
+
+n = 3
+clock = [0] * n
+
+def event(p):
+    clock[p] += 1
+    print(clock)
+
+def send(p):
+    clock[p] += 1
+    return clock.copy()
+
+def receive(p, msg):
+    for i in range(n):
+        clock[i] = max(clock[i], msg[i])
+    clock[p] += 1
+    print(clock)
+
+event(0)
+msg = send(0)
+receive(1, msg)
+event(2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class LamportClock:
+    def __init__(self, process_name):
+        self.process_name = process_name
+        self.clock = 0
+#
+    def internal_event(self):
+        self.clock += 1
+        print(f"{self.process_name}: Internal event, clock = {self.clock}")
+#
+    def send_message(self):
+        self.clock += 1
+        timestamp = self.clock
+        print(f"{self.process_name}: Sending message, timestamp = {timestamp}")
+        return timestamp
+#
+    def receive_message(self, received_timestamp):
+        self.clock = max(self.clock, received_timestamp) + 1
+        print(
+            f"{self.process_name}: Received message with timestamp "
+            f"{received_timestamp}, updated clock = {self.clock}"
+        )
+#
+def main():
+    p1 = LamportClock("P1")
+    p2 = LamportClock("P2")
+    print("INITIAL EVENTS")
+    p1.internal_event()
+    p2.internal_event()
+    print("\nMESSAGE TRANSMISSION: P1 -> P2")
+    timestamp = p1.send_message()
+    p2.receive_message(timestamp)
+    print("\nMORE EVENTS")
+    p2.internal_event()
+    print("\nMESSAGE TRANSMISSION: P2 -> P1")
+    timestamp = p2.send_message()
+    p1.receive_message(timestamp)
+    print("\nFINAL CLOCK VALUES")
+    print("P1 clock:", p1.clock)
+    print("P2 clock:", p2.clock)
+#
+if __name__ == "__main__":
+    main()
+#
+Expected final values: P1 clock = 6; P2 clock = 5.
+#
+TASK 2: VECTOR CLOCK
+Run as vector_clock.py.
+#
+-------------------- vector_clock.py --------------------
+class VectorClock:
+    def __init__(self, process_id, total_processes):
+        self.process_id = process_id
+        self.total_processes = total_processes
+        self.clock = [0] * total_processes
+#
+    def internal_event(self):
+        self.clock[self.process_id] += 1
+        print(f"P{self.process_id}: Internal event, vector = {self.clock}")
+#
+    def send_message(self):
+        self.clock[self.process_id] += 1
+        message_timestamp = self.clock.copy()
+        print(f"P{self.process_id}: Sending message, vector = {message_timestamp}")
+        return message_timestamp
+#
+    def receive_message(self, received_vector):
+        for i in range(self.total_processes):
+            self.clock[i] = max(self.clock[i], received_vector[i])
+        self.clock[self.process_id] += 1
+        print(f"P{self.process_id}: Received message, vector = {self.clock}")
+#
+def main():
+    p1 = VectorClock(0, 2)
+    p2 = VectorClock(1, 2)
+    print("INITIAL EVENTS")
+    p1.internal_event()
+    p2.internal_event()
+    print("\nMESSAGE TRANSMISSION: P1 -> P2")
+    message = p1.send_message()
+    p2.receive_message(message)
+    print("\nMORE EVENTS")
+    p2.internal_event()
+    print("\nMESSAGE TRANSMISSION: P2 -> P1")
+    message = p2.send_message()
+    p1.receive_message(message)
+    print("\nFINAL VECTOR CLOCKS")
+    print("P1:", p1.clock)
+    print("P2:", p2.clock)
+#
+if __name__ == "__main__":
+    main()
+#
+Expected final vectors: P1 = [3, 4]; P2 = [2, 4].

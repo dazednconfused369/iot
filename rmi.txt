@@ -1,0 +1,116 @@
+import Pyro4
+
+
+@Pyro4.expose
+class Calculator:
+    
+    def add_numbers(self, a, b):
+        return a + b
+
+    def multiply(self, a, b):
+        return a * b
+
+
+# Create Pyro daemon
+daemon = Pyro4.Daemon()
+
+# Register Calculator object
+uri = daemon.register(Calculator)
+
+print("Calculator Server is running...")
+print("Server URI:", uri)
+
+# Start listening for client requests
+daemon.requestLoop()
+
+
+
+
+
+import Pyro4
+
+# Get URI from user
+uri = input("Enter the Server URI: ")
+
+# Connect to remote Calculator object
+calculator = Pyro4.Proxy(uri)
+
+# Input numbers
+a = float(input("Enter first number: "))
+b = float(input("Enter second number: "))
+
+# Invoke remote methods
+addition_result = calculator.add_numbers(a, b)
+multiplication_result = calculator.multiply(a, b)
+
+# Display results
+print("\nResults received from remote server:")
+print("Addition =", addition_result)
+print("Multiplication =", multiplication_result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import Pyro5.api
+
+@Pyro5.api.expose
+class Bank:
+    def __init__(self):
+        self.balance = 1000
+
+    def deposit(self, amount):
+        self.balance += amount
+        return self.balance
+
+    def withdraw(self, amount):
+        if amount <= self.balance:
+            self.balance -= amount
+            return self.balance
+        return "Insufficient balance"
+
+    def get_balance(self):
+        return self.balance
+
+daemon = Pyro5.api.Daemon()
+uri = daemon.register(Bank())
+
+print("Bank server URI:", uri)
+daemon.requestLoop()
+
+
+
+
+
+import Pyro5.api
+
+uri = input("Enter server URI: ")
+bank = Pyro5.api.Proxy(uri)
+
+while True:
+    print("\n1.Deposit  2.Withdraw  3.Balance  4.Exit")
+    choice = input("Enter choice: ")
+
+    if choice == "1":
+        amount = float(input("Amount: "))
+        print("Balance:", bank.deposit(amount))
+
+    elif choice == "2":
+        amount = float(input("Amount: "))
+        print("Result:", bank.withdraw(amount))
+
+    elif choice == "3":
+        print("Balance:", bank.get_balance())
+
+    elif choice == "4":
+        break
