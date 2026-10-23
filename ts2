@@ -1,0 +1,45 @@
+Experiment 6: Task Scheduling and Load Balancing
+Aim
+Schedule recurring tasks on an Ubuntu VM with cron and record their output.
+
+Requirements
+One Ubuntu VM in VMware with an internet connection
+A terminal opened in the VM
+Procedure
+1. Install and start cron
+sudo apt update
+sudo apt install -y cron
+sudo systemctl enable --now cron
+sudo systemctl status cron --no-pager
+Confirm the status says active (running).
+
+2. Create a task script
+cd ~
+nano script.sh
+Enter this script:
+
+#!/bin/bash
+echo "Scheduled run: $(date)"
+echo "Host: $(hostname)"
+uptime
+Save with Ctrl+O, Enter, and exit with Ctrl+X. Make it executable and run it once:
+
+chmod +x ~/script.sh
+ls -l ~/script.sh
+~/script.sh
+3. Schedule the task every minute
+Open your own crontab:
+
+crontab -e
+If prompted, select nano. Add this line at the bottom, replacing your_username with the name printed by whoami:
+
+(If its asked for 60 seconds ie 1 Minute)
+* /1* * * * /home/whoami_response/script.sh >> /home/whoami_response/output.log 2>&1
+For example, if whoami prints shan, the line should be:
+
+* * * * * /home/shan/script.sh >> /home/shan/output.log 2>&1
+Save and exit nano. Wait one or two minutes, then check the output:
+
+cat ~/output.log
+4. Check cron's log
+sudo journalctl -u cron --since "5 minutes ago" --no-pager
